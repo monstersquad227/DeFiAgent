@@ -1,6 +1,6 @@
 package services
 
-import "arbi-mcp-server/model"
+import "defi-mcp-server/model"
 
 type AccountbalanceService interface {
 	GetBalance(address, token, network string) ([]map[string]string, error)
