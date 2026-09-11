@@ -1,6 +1,6 @@
 # DeFi Agent
 
-[中文](https://github.com/monstersquad227/DeFiAgent/edit/main/README_ZH.md) | [English](https://github.com/monstersquad227/DeFiAgent/edit/main/README.md)
+[中文](https://github.com/monstersquad227/DeFiAgent/blob/main/README_ZH.md) | [English](https://github.com/monstersquad227/DeFiAgent/blob/main/README.md)
 
 A DeFi on-chain interaction project powered by an AI Agent.
 
