@@ -36,6 +36,20 @@ var dexTokenMap = map[string]struct {
 	"ARB":  {common.HexToAddress("0x912CE59144191C1204E64559FE8253a0e49E6548"), 18},
 }
 
+// Arbitrum Sepolia Testnet 代币
+var dexTokenMapTestnet = map[string]struct {
+	Address  common.Address
+	Decimals int64
+}{
+	"ETH":  {common.HexToAddress("0x980B62Da83eFf3D4576C647993b0c1D7faf17c73"), 18},
+	"WETH": {common.HexToAddress("0x980B62Da83eFf3D4576C647993b0c1D7faf17c73"), 18},
+	"USDC": {common.HexToAddress("0x75faf114eafb1BDbe2Fc6eedaBfD18A7d4d0F06e"), 6},
+	"USDT": {common.HexToAddress("0x3e2E9E4E6d4B0e6C0eF4E0B0e0B0e0b0E0b0E0b0"), 6},
+	"DAI":  {common.HexToAddress("0x4D372cF0E7B2e5E3C5E3C5E3C5E3C5E3C5E3C5E3"), 18},
+	"WBTC": {common.HexToAddress("0x8f3Cf7ad23Cd3CaF9737af9c0C0E0E0E0E0E0E0E"), 8},
+	"ARB":  {common.HexToAddress("0x1a4d3B4f2C0B0e0B0e0B0e0B0e0B0e0B0e0B0e0B"), 18},
+}
+
 // Uniswap V3 Quoter V2 (跨链确定性地址)
 var uniswapQuoterV2 = common.HexToAddress("0x61fFE014bA17989E743c5F6cB21bF9697530B21e")
 
@@ -50,12 +64,13 @@ var feeTiers = []int64{100, 500, 3000, 10000}
 
 type dexQuoteService struct {
 	ethMainnet      *EthereumService
+	ethTestnet      *EthereumService
 	quoterV2ABI     abi.ABI
 	routerV2ABI     abi.ABI
 	camelotQuoterABI abi.ABI
 }
 
-func NewDexQuoteService(ethMainnet *EthereumService) DexQuoteService {
+func NewDexQuoteService(ethMainnet, ethTestnet *EthereumService) DexQuoteService {
 	parsedQuoter, err := abi.JSON(strings.NewReader(quoterV2ABI))
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse quoter V2 ABI: %v", err))
@@ -70,6 +85,7 @@ func NewDexQuoteService(ethMainnet *EthereumService) DexQuoteService {
 	}
 	return &dexQuoteService{
 		ethMainnet:       ethMainnet,
+		ethTestnet:       ethTestnet,
 		quoterV2ABI:      parsedQuoter,
 		routerV2ABI:      parsedRouter,
 		camelotQuoterABI: parsedCamelotQuoter,
@@ -87,15 +103,17 @@ func (s *dexQuoteService) GetQuote(tokenIn, tokenOut, network string, amount flo
 	if tokenIn == tokenOut {
 		return nil, fmt.Errorf("tokenIn and tokenOut must be different")
 	}
-	if network != "mainnet" {
-		return nil, fmt.Errorf("unsupported network: %s, only mainnet is supported for DEX quotes", network)
+
+	client, tokenMap, err := s.selectClient(network)
+	if err != nil {
+		return nil, err
 	}
 
-	tkIn, ok := dexTokenMap[tokenIn]
+	tkIn, ok := tokenMap[tokenIn]
 	if !ok {
 		return nil, fmt.Errorf("unsupported tokenIn: %s, supported: ETH, WETH, USDC, USDT, DAI, WBTC, ARB", tokenIn)
 	}
-	tkOut, ok := dexTokenMap[tokenOut]
+	tkOut, ok := tokenMap[tokenOut]
 	if !ok {
 		return nil, fmt.Errorf("unsupported tokenOut: %s, supported: ETH, WETH, USDC, USDT, DAI, WBTC, ARB", tokenOut)
 	}
@@ -106,7 +124,7 @@ func (s *dexQuoteService) GetQuote(tokenIn, tokenOut, network string, amount flo
 	var quotes []model.DexQuoteItem
 
 	// === Uniswap V3 (Quoter V2) ===
-	if bestOut, err := s.quoteUniswapV3(tkIn.Address, tkOut.Address, amountInWei); err == nil {
+	if bestOut, err := s.quoteUniswapV3(tkIn.Address, tkOut.Address, amountInWei, client); err == nil {
 		quotes = append(quotes, model.DexQuoteItem{
 			Dex:       "Uniswap",
 			AmountOut: weiToFloat(bestOut, tkOut.Decimals),
@@ -118,22 +136,24 @@ func (s *dexQuoteService) GetQuote(tokenIn, tokenOut, network string, amount flo
 		})
 	}
 
-	// === Camelot (先试 Router V3 getAmountsOut，失败则用 Quoter) ===
-	if amountOutWei, err := s.quoteCamelotV3(amountInWei, path); err == nil {
-		quotes = append(quotes, model.DexQuoteItem{
-			Dex:       "Camelot",
-			AmountOut: weiToFloat(amountOutWei, tkOut.Decimals),
-		})
-	} else if amountOutWei, qErr := s.quoteCamelotQuoter(tkIn.Address, tkOut.Address, amountInWei); qErr == nil {
-		quotes = append(quotes, model.DexQuoteItem{
-			Dex:       "Camelot",
-			AmountOut: weiToFloat(amountOutWei, tkOut.Decimals),
-		})
-	} else {
-		quotes = append(quotes, model.DexQuoteItem{
-			Dex:       "Camelot",
-			AmountOut: 0,
-		})
+	// === Camelot (仅 mainnet 有效) ===
+	if network == "mainnet" {
+		if amountOutWei, err := s.quoteCamelotV3(amountInWei, path, client); err == nil {
+			quotes = append(quotes, model.DexQuoteItem{
+				Dex:       "Camelot",
+				AmountOut: weiToFloat(amountOutWei, tkOut.Decimals),
+			})
+		} else if amountOutWei, qErr := s.quoteCamelotQuoter(tkIn.Address, tkOut.Address, amountInWei, client); qErr == nil {
+			quotes = append(quotes, model.DexQuoteItem{
+				Dex:       "Camelot",
+				AmountOut: weiToFloat(amountOutWei, tkOut.Decimals),
+			})
+		} else {
+			quotes = append(quotes, model.DexQuoteItem{
+				Dex:       "Camelot",
+				AmountOut: 0,
+			})
+		}
 	}
 
 	return &model.DexQuoteResponse{
@@ -144,8 +164,23 @@ func (s *dexQuoteService) GetQuote(tokenIn, tokenOut, network string, amount flo
 	}, nil
 }
 
+// selectClient 根据 network 选择 client 和 token map
+func (s *dexQuoteService) selectClient(network string) (*EthereumService, map[string]struct {
+	Address  common.Address
+	Decimals int64
+}, error) {
+	switch network {
+	case "mainnet":
+		return s.ethMainnet, dexTokenMap, nil
+	case "testnet":
+		return s.ethTestnet, dexTokenMapTestnet, nil
+	default:
+		return nil, nil, fmt.Errorf("unsupported network: %s, supported: mainnet, testnet", network)
+	}
+}
+
 // quoteUniswapV3 通过 Quoter V2 获取最优报价（多 fee 层级取最优）
-func (s *dexQuoteService) quoteUniswapV3(tokenIn, tokenOut common.Address, amountIn *big.Int) (*big.Int, error) {
+func (s *dexQuoteService) quoteUniswapV3(tokenIn, tokenOut common.Address, amountIn *big.Int, eth *EthereumService) (*big.Int, error) {
 	var bestOut *big.Int
 	var lastErr error
 	sqrtPriceLimitX96 := big.NewInt(0) // 无价格限制
@@ -171,7 +206,7 @@ func (s *dexQuoteService) quoteUniswapV3(tokenIn, tokenOut common.Address, amoun
 			continue
 		}
 
-		result, err := s.ethMainnet.Client.CallContract(context.Background(),
+		result, err := eth.Client.CallContract(context.Background(),
 			ethereum.CallMsg{To: &uniswapQuoterV2, Data: data}, nil)
 		if err != nil {
 			lastErr = err
@@ -207,13 +242,13 @@ func (s *dexQuoteService) quoteUniswapV3(tokenIn, tokenOut common.Address, amoun
 }
 
 // quoteCamelotV3 通过 Camelot Router v3 的 getAmountsOut 获取报价
-func (s *dexQuoteService) quoteCamelotV3(amountIn *big.Int, path []common.Address) (*big.Int, error) {
+func (s *dexQuoteService) quoteCamelotV3(amountIn *big.Int, path []common.Address, eth *EthereumService) (*big.Int, error) {
 	data, err := s.routerV2ABI.Pack("getAmountsOut", amountIn, path)
 	if err != nil {
 		return nil, fmt.Errorf("encode getAmountsOut: %w", err)
 	}
 
-	result, err := s.ethMainnet.Client.CallContract(context.Background(),
+	result, err := eth.Client.CallContract(context.Background(),
 		ethereum.CallMsg{To: &camelotRouterV3, Data: data}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Camelot Router call failed: %w", err)
@@ -236,7 +271,7 @@ func (s *dexQuoteService) quoteCamelotV3(amountIn *big.Int, path []common.Addres
 }
 
 // quoteCamelotQuoter 通过 Camelot Quoter (Algebra) 获取报价（回退方案）
-func (s *dexQuoteService) quoteCamelotQuoter(tokenIn, tokenOut common.Address, amountIn *big.Int) (*big.Int, error) {
+func (s *dexQuoteService) quoteCamelotQuoter(tokenIn, tokenOut common.Address, amountIn *big.Int, eth *EthereumService) (*big.Int, error) {
 	limitSqrtPrice := big.NewInt(0) // 无价格限制
 
 	data, err := s.camelotQuoterABI.Pack("quoteExactInputSingle", tokenIn, tokenOut, amountIn, limitSqrtPrice)
@@ -244,7 +279,7 @@ func (s *dexQuoteService) quoteCamelotQuoter(tokenIn, tokenOut common.Address, a
 		return nil, fmt.Errorf("encode Camelot quoteExactInputSingle: %w", err)
 	}
 
-	result, err := s.ethMainnet.Client.CallContract(context.Background(),
+	result, err := eth.Client.CallContract(context.Background(),
 		ethereum.CallMsg{To: &camelotQuoter, Data: data}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Camelot Quoter call failed: %w", err)
