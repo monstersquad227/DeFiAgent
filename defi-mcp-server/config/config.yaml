@@ -1,0 +1,10 @@
+application:
+    name: defi-mcp-server
+    version: 1.0.0
+    description: DeFi MCP Server
+    port: 30001
+
+# Avalanche C-Chain mainnet
+rpcurl: https://api.avax.network/ext/bc/C/rpc
+# Avalanche Fuji testnet
+rpcurltest: https://api.avax-test.network/ext/bc/C/rpc

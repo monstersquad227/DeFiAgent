@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"arbi-mcp-server/model"
-	"arbi-mcp-server/services"
+	"defi-mcp-server/model"
+	"defi-mcp-server/services"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )

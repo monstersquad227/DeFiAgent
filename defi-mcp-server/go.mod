@@ -1,4 +1,4 @@
-module arbi-mcp-server
+module defi-mcp-server
 
 go 1.25.0
 

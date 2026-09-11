@@ -6,7 +6,7 @@ import (
 	"math/big"
 	"strings"
 
-	"arbi-mcp-server/model"
+	"defi-mcp-server/model"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -29,8 +29,8 @@ func buildAddrToToken(tokenMap map[string]struct {
 }) map[common.Address]tokenMeta {
 	out := make(map[common.Address]tokenMeta)
 	for sym, info := range tokenMap {
-		if sym == "WETH" {
-			continue // 与 ETH 共用地址，跳过
+		if sym == "WAVAX" {
+			continue // 与 AVAX 共用地址，跳过
 		}
 		out[info.Address] = tokenMeta{Symbol: sym, Decimals: info.Decimals}
 	}
@@ -191,7 +191,7 @@ func (s *transactionStatusService) parseTransfers(logs []*types.Log, tx *types.T
 	if tx != nil && tx.Value() != nil && tx.Value().Sign() > 0 && tx.To() != nil {
 		chainID := tx.ChainId()
 		if chainID == nil {
-			chainID = big.NewInt(42161) // Arbitrum Mainnet
+			chainID = big.NewInt(43114) // Avalanche C-Chain
 		}
 		from, err := types.Sender(types.NewLondonSigner(chainID), tx)
 		if err != nil {

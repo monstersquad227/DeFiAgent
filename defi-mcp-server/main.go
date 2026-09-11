@@ -5,10 +5,10 @@ import (
 	"log"
 	"net/http"
 
-	"arbi-mcp-server/config"
-	"arbi-mcp-server/controller"
-	"arbi-mcp-server/services"
-	"arbi-mcp-server/tools"
+	"defi-mcp-server/config"
+	"defi-mcp-server/controller"
+	"defi-mcp-server/services"
+	"defi-mcp-server/tools"
 
 	"github.com/gin-gonic/gin"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
