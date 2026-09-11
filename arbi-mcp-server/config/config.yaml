@@ -1,0 +1,10 @@
+application:
+    name: arbi-mcp-server
+    version: 1.0.0
+    description: Arbi MCP Server
+    port: 30001
+
+# Arbitrum  mainnet
+rpcurl: https://public.1rpc.io/arb
+# Arbitrum testnet
+rpcurltest: https://sepolia-rollup.arbitrum.io/rpc
