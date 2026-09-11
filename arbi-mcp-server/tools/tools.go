@@ -20,3 +20,16 @@ func AccountbalanceTools(server *mcp.Server, ctrl *controller.AccountbalanceCont
 		InputSchema: inputSchema,
 	}, ctrl.GetAccountBalance)
 }
+
+func DexQuoteTools(server *mcp.Server, ctrl *controller.DexQuoteController) {
+	inputSchema, err := jsonschema.For[model.DexQuoteRequest](&jsonschema.ForOptions{})
+	if err != nil {
+		panic(err)
+	}
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_dex_quote",
+		Description: "获取 Arbitrum 链上 DEX 报价，对比 Uniswap 和 Camelot 的最优价格。支持 ETH/WETH/USDC/USDT/DAI/WBTC/ARB。",
+		InputSchema: inputSchema,
+	}, ctrl.GetDexQuote)
+}

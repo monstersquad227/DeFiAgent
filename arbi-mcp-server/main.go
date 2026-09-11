@@ -34,8 +34,14 @@ func main() {
 	// 初始化 Accountbalance 服务层
 	accSvc := services.NewAccountbalanceService(ethSvc, ethSvcTest)
 
+	// 初始化 DexQuote 服务层
+	dexSvc := services.NewDexQuoteService(ethSvc)
+
 	// 初始化 Accountbalance 控制器
 	accCtrl := &controller.AccountbalanceController{Svc: accSvc}
+
+	// 初始化 DexQuote 控制器
+	dexCtrl := &controller.DexQuoteController{Svc: dexSvc}
 
 	// 创建 MCP Server
 	server := mcp.NewServer(
@@ -45,6 +51,7 @@ func main() {
 
 	// 注册工具
 	tools.AccountbalanceTools(server, accCtrl)
+	tools.DexQuoteTools(server, dexCtrl)
 
 	// 创建 HTTP Handler
 	handler := mcp.NewStreamableHTTPHandler(
